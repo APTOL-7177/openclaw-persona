@@ -202,16 +202,40 @@ async function main() {
 
   // ─── 3. API 키 설정 ───
   console.log('\n━━━ 3/5: API 키 설정 ━━━\n');
+
+  const authModeAnswers = await inquirer.prompt([{
+    type: 'list',
+    name: 'anthropicAuth',
+    message: 'Anthropic 인증 방식:',
+    choices: [
+      { name: 'API 키 직접 입력 (sk-ant-...)', value: 'token' },
+      { name: 'Claude Max/Pro 구독 연결 (OAuth, 브라우저 인증)', value: 'oauth' },
+      { name: '나중에 설정', value: 'skip' },
+    ],
+  }]);
+
+  let anthropicKey = '';
+  let anthropicOAuth = false;
+
+  if (authModeAnswers.anthropicAuth === 'token') {
+    const { key } = await inquirer.prompt([{
+      type: 'password',
+      name: 'key',
+      message: 'Anthropic API 키 (sk-ant-...):',
+      mask: '*',
+    }]);
+    anthropicKey = key.trim();
+  } else if (authModeAnswers.anthropicAuth === 'oauth') {
+    anthropicOAuth = true;
+    console.log('\n📌 구독 연결은 캐릭터 생성 후 아래 명령어로 완료하세요:');
+    console.log('   $env:OPENCLAW_HOME = "<출력 디렉토리>"');
+    console.log('   openclaw auth login\n');
+    console.log('   브라우저가 열리면 Claude 계정으로 로그인하세요.\n');
+  }
+
   console.log('💡 빈칸으로 넘기면 나중에 openclaw.json에서 수동 설정 가능\n');
 
   const apiAnswers = await inquirer.prompt([
-    {
-      type: 'password',
-      name: 'anthropicKey',
-      message: 'Anthropic API 키 (sk-ant-...):',
-      mask: '*',
-      default: '',
-    },
     {
       type: 'password',
       name: 'openaiKey',
@@ -382,8 +406,13 @@ async function main() {
   config.agents.defaults.model.primary = AI_MODELS[modelAnswers.modelKey];
 
   // Anthropic auth
-  if (apiAnswers.anthropicKey.trim()) {
-    config.auth.profiles['anthropic:default'].token = apiAnswers.anthropicKey.trim();
+  if (anthropicOAuth) {
+    config.auth.profiles['anthropic:default'] = {
+      provider: 'anthropic',
+      mode: 'oauth',
+    };
+  } else if (anthropicKey) {
+    config.auth.profiles['anthropic:default'].token = anthropicKey;
   }
 
   // OpenAI (memory search)
@@ -476,8 +505,9 @@ async function main() {
   const configured = [];
   const notConfigured = [];
 
-  if (apiAnswers.anthropicKey.trim()) configured.push('Anthropic (AI 모델)');
-  else notConfigured.push('Anthropic API 키');
+  if (anthropicKey) configured.push('Anthropic (API 키)');
+  else if (anthropicOAuth) configured.push('Anthropic (OAuth 구독 — openclaw auth login 필요)');
+  else notConfigured.push('Anthropic 인증');
 
   if (apiAnswers.openaiKey.trim()) configured.push('OpenAI (메모리 검색)');
   else notConfigured.push('OpenAI API 키 (메모리 검색)');
