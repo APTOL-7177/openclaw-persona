@@ -1,6 +1,6 @@
 {
   "name": "@aptol/openclaw-persona",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Create your own AI persona for OpenClaw — interactive CLI character creator with presets, modules, and full customization",
   "type": "module",
   "bin": {

@@ -57,6 +57,12 @@ const DISCORD_POLICIES = {
   '특정 서버/채널만 허용 (ID 직접 입력)': 'allowlist',
 };
 
+const AI_MODELS = {
+  'Claude Opus 4 (최고 성능, 비용 높음)': 'anthropic/claude-opus-4-6',
+  'Claude Sonnet 4 (균형, 추천)': 'anthropic/claude-sonnet-4-20250514',
+  'Claude Sonnet 4.5 (고성능 + 빠름)': 'anthropic/claude-sonnet-4-5-20250514',
+};
+
 async function askServerChannels() {
   const servers = [];
   let addMore = true;
@@ -122,7 +128,10 @@ async function main() {
   console.log('\n🎭 OpenClaw Persona Creator\n');
   console.log('나만의 AI 캐릭터를 만들어보세요!\n');
 
-  const answers = await inquirer.prompt([
+  // ─── 1. 캐릭터 기본 정보 ───
+  console.log('━━━ 1/5: 캐릭터 정보 ━━━\n');
+
+  const charAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'name',
@@ -166,40 +175,6 @@ async function main() {
       validate: (v) => v.trim() ? true : '이름을 입력해주세요.',
     },
     {
-      type: 'input',
-      name: 'discordId',
-      message: 'Discord 사용자 ID (숫자):',
-      validate: (v) => {
-        if (!v.trim()) return '디스코드 ID를 입력해주세요.';
-        if (!/^\d+$/.test(v.trim())) return '숫자만 입력해주세요.';
-        return true;
-      },
-    },
-    {
-      type: 'input',
-      name: 'discordToken',
-      message: 'Discord 봇 토큰 (나중에 설정하려면 빈칸):',
-      default: '',
-    },
-    {
-      type: 'list',
-      name: 'discordPolicyKey',
-      message: '디스코드 서버 정책:',
-      choices: Object.keys(DISCORD_POLICIES),
-    },
-  ]);
-
-  const discordPolicy = DISCORD_POLICIES[answers.discordPolicyKey];
-
-  // If allowlist, ask for server/channel IDs
-  let serverConfigs = [];
-  if (discordPolicy === 'allowlist') {
-    console.log('\n📋 활동할 서버와 채널을 설정합니다.\n');
-    serverConfigs = await askServerChannels();
-  }
-
-  const answers2 = await inquirer.prompt([
-    {
       type: 'list',
       name: 'presetKey',
       message: '프리셋 베이스:',
@@ -211,70 +186,160 @@ async function main() {
       message: '모듈 선택 (스페이스바로 선택):',
       choices: Object.keys(MODULE_MAP),
     },
+  ]);
+
+  // ─── 2. AI 모델 설정 ───
+  console.log('\n━━━ 2/5: AI 모델 설정 ━━━\n');
+
+  const modelAnswers = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'modelKey',
+      message: 'AI 모델 선택:',
+      choices: Object.keys(AI_MODELS),
+    },
+  ]);
+
+  // ─── 3. API 키 설정 ───
+  console.log('\n━━━ 3/5: API 키 설정 ━━━\n');
+  console.log('💡 빈칸으로 넘기면 나중에 openclaw.json에서 수동 설정 가능\n');
+
+  const apiAnswers = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'anthropicKey',
+      message: 'Anthropic API 키 (sk-ant-...):',
+      mask: '*',
+      default: '',
+    },
+    {
+      type: 'password',
+      name: 'openaiKey',
+      message: 'OpenAI API 키 (메모리 검색용, sk-...):',
+      mask: '*',
+      default: '',
+    },
+    {
+      type: 'password',
+      name: 'braveKey',
+      message: 'Brave Search API 키 (웹 검색용):',
+      mask: '*',
+      default: '',
+    },
+    {
+      type: 'password',
+      name: 'elevenlabsKey',
+      message: 'ElevenLabs API 키 (음성 TTS용, 선택):',
+      mask: '*',
+      default: '',
+    },
+    {
+      type: 'password',
+      name: 'deepgramKey',
+      message: 'Deepgram API 키 (음성 STT용, 선택):',
+      mask: '*',
+      default: '',
+    },
+  ]);
+
+  // ─── 4. 디스코드 설정 ───
+  console.log('\n━━━ 4/5: 디스코드 설정 ━━━\n');
+
+  const discordAnswers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'discordId',
+      message: 'Discord 사용자 ID (숫자, 주인):',
+      validate: (v) => {
+        if (!v.trim()) return '디스코드 ID를 입력해주세요.';
+        if (!/^\d+$/.test(v.trim())) return '숫자만 입력해주세요.';
+        return true;
+      },
+    },
+    {
+      type: 'password',
+      name: 'discordToken',
+      message: 'Discord 봇 토큰:',
+      mask: '*',
+      default: '',
+    },
+    {
+      type: 'list',
+      name: 'discordPolicyKey',
+      message: '디스코드 서버 정책:',
+      choices: Object.keys(DISCORD_POLICIES),
+    },
+  ]);
+
+  const discordPolicy = DISCORD_POLICIES[discordAnswers.discordPolicyKey];
+
+  let serverConfigs = [];
+  if (discordPolicy === 'allowlist') {
+    console.log('\n📋 활동할 서버와 채널을 설정합니다.\n');
+    serverConfigs = await askServerChannels();
+  }
+
+  // ─── 5. 출력 설정 ───
+  console.log('\n━━━ 5/5: 출력 설정 ━━━\n');
+
+  const outputAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'outputDir',
       message: '출력 디렉토리:',
-      default: `./output/${answers.name.trim()}`,
+      default: `./output/${charAnswers.name.trim()}`,
+    },
+    {
+      type: 'input',
+      name: 'gatewayPort',
+      message: '게이트웨이 포트 (기본 18789, 다른 봇 있으면 변경):',
+      default: '18789',
+      validate: (v) => /^\d+$/.test(v.trim()) ? true : '숫자만 입력해주세요.',
     },
   ]);
 
+  // ─── Build ───
+
   const vars = {
-    name: answers.name.trim(),
-    gender: answers.gender,
-    speechStyle: SPEECH_STYLES[answers.speechStyleKey],
-    personality: answers.personality.trim(),
-    likes: answers.likes.trim(),
-    dislikes: answers.dislikes.trim(),
-    creator: answers.creator.trim(),
+    name: charAnswers.name.trim(),
+    gender: charAnswers.gender,
+    speechStyle: SPEECH_STYLES[charAnswers.speechStyleKey],
+    personality: charAnswers.personality.trim(),
+    likes: charAnswers.likes.trim(),
+    dislikes: charAnswers.dislikes.trim(),
+    creator: charAnswers.creator.trim(),
   };
 
-  const preset = PRESET_NAMES[answers2.presetKey];
-  const outputDir = answers2.outputDir;
+  const preset = PRESET_NAMES[charAnswers.presetKey];
+  const outputDir = outputAnswers.outputDir;
 
   // Create output directories
   mkdirSync(join(outputDir, 'memory'), { recursive: true });
   mkdirSync(join(outputDir, 'modules'), { recursive: true });
 
-  // Generate files
+  // Generate character files
   if (preset) {
     const presetDir = join(ROOT, 'presets', preset);
-    const soulContent = replaceVars(readTemplate(join(presetDir, 'SOUL.md')), vars);
-    const agentsContent = readTemplate(join(presetDir, 'AGENTS.md'));
-    const identityContent = replaceVars(readTemplate(join(presetDir, 'IDENTITY.md')), vars);
-
-    writeOutput(outputDir, 'SOUL.md', soulContent);
-    writeOutput(outputDir, 'AGENTS.md', agentsContent);
-    writeOutput(outputDir, 'IDENTITY.md', identityContent);
+    writeOutput(outputDir, 'SOUL.md', replaceVars(readTemplate(join(presetDir, 'SOUL.md')), vars));
+    writeOutput(outputDir, 'AGENTS.md', readTemplate(join(presetDir, 'AGENTS.md')));
+    writeOutput(outputDir, 'IDENTITY.md', replaceVars(readTemplate(join(presetDir, 'IDENTITY.md')), vars));
   } else {
-    const soulContent = replaceVars(readTemplate(join(ROOT, 'templates', 'SOUL.template.md')), vars);
-    const agentsContent = readTemplate(join(ROOT, 'templates', 'AGENTS.template.md'));
-    const identityContent = replaceVars(readTemplate(join(ROOT, 'templates', 'IDENTITY.template.md')), vars);
-
-    writeOutput(outputDir, 'SOUL.md', soulContent);
-    writeOutput(outputDir, 'AGENTS.md', agentsContent);
-    writeOutput(outputDir, 'IDENTITY.md', identityContent);
+    writeOutput(outputDir, 'SOUL.md', replaceVars(readTemplate(join(ROOT, 'templates', 'SOUL.template.md')), vars));
+    writeOutput(outputDir, 'AGENTS.md', readTemplate(join(ROOT, 'templates', 'AGENTS.template.md')));
+    writeOutput(outputDir, 'IDENTITY.md', replaceVars(readTemplate(join(ROOT, 'templates', 'IDENTITY.template.md')), vars));
   }
 
-  // USER.md
-  const userContent = replaceVars(readTemplate(join(ROOT, 'templates', 'USER.template.md')), vars);
-  writeOutput(outputDir, 'USER.md', userContent);
-
-  // MEMORY.md
-  const memoryContent = replaceVars(readTemplate(join(ROOT, 'templates', 'MEMORY.template.md')), vars);
-  writeOutput(outputDir, 'MEMORY.md', memoryContent);
+  writeOutput(outputDir, 'USER.md', replaceVars(readTemplate(join(ROOT, 'templates', 'USER.template.md')), vars));
+  writeOutput(outputDir, 'MEMORY.md', replaceVars(readTemplate(join(ROOT, 'templates', 'MEMORY.template.md')), vars));
 
   // Copy selected modules
   let hasProactiveChat = false;
-  for (const moduleKey of answers2.moduleKeys) {
+  for (const moduleKey of charAnswers.moduleKeys) {
     const moduleFile = MODULE_MAP[moduleKey];
-    const src = join(ROOT, 'modules', moduleFile);
-    const dest = join(outputDir, 'modules', moduleFile);
-    copyFileSync(src, dest);
+    copyFileSync(join(ROOT, 'modules', moduleFile), join(outputDir, 'modules', moduleFile));
     if (moduleFile === 'proactive-chat.md') hasProactiveChat = true;
   }
 
-  // If proactive-chat module selected, create HEARTBEAT.md
   if (hasProactiveChat) {
     writeOutput(outputDir, 'HEARTBEAT.md', `# HEARTBEAT.md
 
@@ -307,15 +372,65 @@ async function main() {
 `);
   }
 
-  // Build openclaw config
+  // ─── Build openclaw.json ───
+
   const config = JSON.parse(readFileSync(join(ROOT, 'config', 'openclaw.template.json'), 'utf-8'));
-  config.agents.defaults.workspace = outputDir;
-  const discordId = answers.discordId.trim();
-  const discordToken = answers.discordToken.trim();
-  config.channels.discord.token = discordToken || '';
+  const discordId = discordAnswers.discordId.trim();
+  const port = parseInt(outputAnswers.gatewayPort.trim());
+
+  // Model
+  config.agents.defaults.model.primary = AI_MODELS[modelAnswers.modelKey];
+
+  // Anthropic auth
+  if (apiAnswers.anthropicKey.trim()) {
+    config.auth.profiles['anthropic:default'].token = apiAnswers.anthropicKey.trim();
+  }
+
+  // OpenAI (memory search)
+  if (apiAnswers.openaiKey.trim()) {
+    config.agents.defaults.memorySearch.remote = { apiKey: apiAnswers.openaiKey.trim() };
+  }
+
+  // Brave Search
+  if (apiAnswers.braveKey.trim()) {
+    if (!config.plugins) config.plugins = { entries: {} };
+    config.plugins.entries = config.plugins.entries || {};
+    config.plugins.entries.brave = {
+      enabled: true,
+      config: { webSearch: { apiKey: apiAnswers.braveKey.trim() } },
+    };
+    if (!config.tools) config.tools = {};
+    config.tools.web = { search: { provider: 'brave' } };
+  }
+
+  // ElevenLabs
+  if (apiAnswers.elevenlabsKey.trim()) {
+    if (!config.env) config.env = {};
+    if (!config.env.vars) config.env.vars = {};
+    config.env.vars.ELEVENLABS_API_KEY = apiAnswers.elevenlabsKey.trim();
+  }
+
+  // Deepgram
+  if (apiAnswers.deepgramKey.trim()) {
+    if (!config.env) config.env = {};
+    if (!config.env.vars) config.env.vars = {};
+    config.env.vars.DEEPGRAM_API_KEY = apiAnswers.deepgramKey.trim();
+    config.env.vars.DEEPGRAM_MODEL = 'nova-3';
+    config.env.vars.DEEPGRAM_LANGUAGE = 'ko';
+  }
+
+  // Discord
+  config.channels.discord.token = discordAnswers.discordToken.trim() || '';
   config.channels.discord.dmPolicy = 'allowlist';
   config.channels.discord.allowFrom = [discordId];
-  config.commands = { ownerAllowFrom: [discordId] };
+  config.commands = {
+    native: 'auto',
+    nativeSkills: 'auto',
+    debug: true,
+    restart: true,
+    ownerAllowFrom: [discordId],
+    ownerDisplay: 'raw',
+  };
 
   // Discord server policy
   if (discordPolicy === 'mention') {
@@ -323,65 +438,86 @@ async function main() {
   } else if (discordPolicy === 'all') {
     config.channels.discord.groupPolicy = 'all';
   } else {
-    // allowlist with specific servers/channels
     config.channels.discord.groupPolicy = 'allowlist';
     const guilds = {};
     for (const server of serverConfigs) {
-      const guild = {
-        requireMention: server.requireMention,
-        channels: {},
-      };
-      if (server.channels.length > 0) {
-        for (const chId of server.channels) {
-          guild.channels[chId] = {
-            allow: true,
-            requireMention: server.requireMention,
-            enabled: true,
-          };
-        }
-      } else {
-        // No specific channels = server-wide (empty channels object means all channels)
-        guild.channels = {};
+      const guild = { requireMention: server.requireMention, channels: {} };
+      for (const chId of server.channels) {
+        guild.channels[chId] = { allow: true, requireMention: server.requireMention, enabled: true };
       }
       guilds[server.guildId] = guild;
     }
     config.channels.discord.guilds = guilds;
   }
 
-  writeOutput(outputDir, 'openclaw.json', JSON.stringify(config, null, 2) + '\n');
+  // Gateway
+  config.gateway.port = port;
 
-  // Create empty .gitkeep in memory folder
+  // Discord plugin
+  if (!config.plugins) config.plugins = { entries: {} };
+  config.plugins.entries.discord = { enabled: true, config: {} };
+
+  // Streaming
+  config.channels.discord.streaming = 'partial';
+  config.channels.discord.historyLimit = 16;
+  config.channels.discord.intents = { presence: true };
+  config.channels.discord.actions = {
+    reactions: true, stickers: true, emojiUploads: true, stickerUploads: true,
+    polls: true, permissions: true, messages: true, threads: true, pins: true,
+    search: true, memberInfo: true, roleInfo: true, roles: true, channelInfo: true,
+    voiceStatus: true, events: true, moderation: true, channels: true, presence: true,
+  };
+
+  writeOutput(outputDir, 'openclaw.json', JSON.stringify(config, null, 2) + '\n');
   writeFileSync(join(outputDir, 'memory', '.gitkeep'), '', 'utf-8');
+
+  // ─── Summary ───
+
+  const configured = [];
+  const notConfigured = [];
+
+  if (apiAnswers.anthropicKey.trim()) configured.push('Anthropic (AI 모델)');
+  else notConfigured.push('Anthropic API 키');
+
+  if (apiAnswers.openaiKey.trim()) configured.push('OpenAI (메모리 검색)');
+  else notConfigured.push('OpenAI API 키 (메모리 검색)');
+
+  if (apiAnswers.braveKey.trim()) configured.push('Brave Search (웹 검색)');
+  else notConfigured.push('Brave Search API 키 (웹 검색)');
+
+  if (apiAnswers.elevenlabsKey.trim()) configured.push('ElevenLabs (음성 TTS)');
+  if (apiAnswers.deepgramKey.trim()) configured.push('Deepgram (음성 STT)');
+
+  if (discordAnswers.discordToken.trim()) configured.push('Discord 봇 토큰');
+  else notConfigured.push('Discord 봇 토큰');
 
   console.log(`\n✅ ${vars.name} 생성 완료!`);
   console.log(`📁 위치: ${outputDir}`);
-  console.log('\n생성된 파일:');
-  console.log('  - SOUL.md (캐릭터 영혼)');
-  console.log('  - AGENTS.md (행동 규칙)');
-  console.log('  - IDENTITY.md (정체성)');
-  console.log('  - USER.md (주인 정보)');
-  console.log('  - MEMORY.md (장기 기억)');
-  console.log('  - openclaw.json (설정)');
-  console.log('  - memory/ (일별 기억 폴더)');
-  if (answers2.moduleKeys.length > 0) {
-    console.log('  - modules/ (선택한 시스템 모듈)');
-  }
+
+  console.log('\n📋 생성된 파일:');
+  console.log('  SOUL.md / AGENTS.md / IDENTITY.md / USER.md / MEMORY.md / openclaw.json');
+  if (charAnswers.moduleKeys.length > 0) console.log('  modules/ (선택한 시스템 모듈)');
+  if (hasProactiveChat) console.log('  HEARTBEAT.md (선제 대화)');
+
+  console.log('\n🔑 API 설정 현황:');
+  if (configured.length > 0) console.log('  ✅ ' + configured.join(', '));
+  if (notConfigured.length > 0) console.log('  ❌ 미설정: ' + notConfigured.join(', '));
+
+  console.log(`\n🤖 모델: ${AI_MODELS[modelAnswers.modelKey]}`);
+
+  if (discordPolicy === 'mention') console.log('🏠 서버 정책: 멘션(@봇) 시에만 반응');
+  else if (discordPolicy === 'all') console.log('🏠 서버 정책: 모든 서버에서 항상 반응');
+  else console.log(`🏠 서버 정책: ${serverConfigs.length}개 서버 허용목록`);
+
+  console.log(`🌐 게이트웨이 포트: ${port}`);
 
   console.log('\n🚀 구동 방법:');
-  if (discordPolicy === 'mention') {
-    console.log('  서버 정책: 멘션(@봇) 시에만 반응');
-  } else if (discordPolicy === 'all') {
-    console.log('  서버 정책: 모든 서버에서 항상 반응');
-  } else {
-    console.log(`  서버 정책: ${serverConfigs.length}개 서버 허용목록`);
+  console.log(`  $env:OPENCLAW_HOME = "${outputDir}"`);
+  console.log('  openclaw gateway run');
+
+  if (notConfigured.length > 0) {
+    console.log('\n⚠️  미설정 항목은 openclaw.json에서 직접 수정하세요.');
   }
-  console.log('');
-  console.log('  1. openclaw.json에서 API 키와 Discord 토큰을 설정하세요');
-  console.log('  2. USER.md에 주인 정보를 추가하세요');
-  console.log('  3. SOUL.md를 원하는 대로 커스텀하세요');
-  console.log('  4. 구동:');
-  console.log(`     $env:OPENCLAW_HOME = "${outputDir}"`);
-  console.log('     openclaw gateway run');
   console.log('');
 }
 
