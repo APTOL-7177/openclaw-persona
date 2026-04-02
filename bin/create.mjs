@@ -51,6 +51,73 @@ const MODULE_MAP = {
   '선제 대화 (Proactive Chat)': 'proactive-chat.md',
 };
 
+const DISCORD_POLICIES = {
+  '모든 서버에서 멘션(@봇) 시 반응 (추천, 설정 불필요)': 'mention',
+  '모든 서버에서 항상 반응': 'all',
+  '특정 서버/채널만 허용 (ID 직접 입력)': 'allowlist',
+};
+
+async function askServerChannels() {
+  const servers = [];
+  let addMore = true;
+
+  while (addMore) {
+    const { guildId } = await inquirer.prompt([{
+      type: 'input',
+      name: 'guildId',
+      message: '서버 ID:',
+      validate: (v) => /^\d+$/.test(v.trim()) ? true : '숫자만 입력해주세요.',
+    }]);
+
+    const { requireMention } = await inquirer.prompt([{
+      type: 'list',
+      name: 'requireMention',
+      message: `이 서버에서 멘션 필요?`,
+      choices: [
+        { name: '아니오 — 모든 메시지에 반응', value: false },
+        { name: '예 — 멘션(@봇)할 때만 반응', value: true },
+      ],
+    }]);
+
+    const channels = [];
+    let addChannels = true;
+
+    while (addChannels) {
+      const { channelId } = await inquirer.prompt([{
+        type: 'input',
+        name: 'channelId',
+        message: '채널 ID (비워두면 서버 전체):',
+        default: '',
+      }]);
+
+      if (channelId.trim()) {
+        channels.push(channelId.trim());
+        const { more } = await inquirer.prompt([{
+          type: 'confirm',
+          name: 'more',
+          message: '채널 더 추가?',
+          default: false,
+        }]);
+        addChannels = more;
+      } else {
+        addChannels = false;
+      }
+    }
+
+    servers.push({ guildId: guildId.trim(), requireMention, channels });
+
+    const { more } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'more',
+      message: '서버 더 추가?',
+      default: false,
+    }]);
+    addMore = more;
+  }
+
+  return servers;
+}
+
 async function main() {
   console.log('\n🎭 OpenClaw Persona Creator\n');
   console.log('나만의 AI 캐릭터를 만들어보세요!\n');
@@ -116,6 +183,24 @@ async function main() {
     },
     {
       type: 'list',
+      name: 'discordPolicyKey',
+      message: '디스코드 서버 정책:',
+      choices: Object.keys(DISCORD_POLICIES),
+    },
+  ]);
+
+  const discordPolicy = DISCORD_POLICIES[answers.discordPolicyKey];
+
+  // If allowlist, ask for server/channel IDs
+  let serverConfigs = [];
+  if (discordPolicy === 'allowlist') {
+    console.log('\n📋 활동할 서버와 채널을 설정합니다.\n');
+    serverConfigs = await askServerChannels();
+  }
+
+  const answers2 = await inquirer.prompt([
+    {
+      type: 'list',
       name: 'presetKey',
       message: '프리셋 베이스:',
       choices: Object.keys(PRESET_NAMES),
@@ -130,7 +215,7 @@ async function main() {
       type: 'input',
       name: 'outputDir',
       message: '출력 디렉토리:',
-      default: (ans) => `./output/${ans.name}`,
+      default: `./output/${answers.name.trim()}`,
     },
   ]);
 
@@ -144,8 +229,8 @@ async function main() {
     creator: answers.creator.trim(),
   };
 
-  const preset = PRESET_NAMES[answers.presetKey];
-  const outputDir = answers.outputDir;
+  const preset = PRESET_NAMES[answers2.presetKey];
+  const outputDir = answers2.outputDir;
 
   // Create output directories
   mkdirSync(join(outputDir, 'memory'), { recursive: true });
@@ -153,7 +238,6 @@ async function main() {
 
   // Generate files
   if (preset) {
-    // Preset-based: copy preset files with variable replacement
     const presetDir = join(ROOT, 'presets', preset);
     const soulContent = replaceVars(readTemplate(join(presetDir, 'SOUL.md')), vars);
     const agentsContent = readTemplate(join(presetDir, 'AGENTS.md'));
@@ -163,7 +247,6 @@ async function main() {
     writeOutput(outputDir, 'AGENTS.md', agentsContent);
     writeOutput(outputDir, 'IDENTITY.md', identityContent);
   } else {
-    // From scratch: use templates
     const soulContent = replaceVars(readTemplate(join(ROOT, 'templates', 'SOUL.template.md')), vars);
     const agentsContent = readTemplate(join(ROOT, 'templates', 'AGENTS.template.md'));
     const identityContent = replaceVars(readTemplate(join(ROOT, 'templates', 'IDENTITY.template.md')), vars);
@@ -183,7 +266,7 @@ async function main() {
 
   // Copy selected modules
   let hasProactiveChat = false;
-  for (const moduleKey of answers.moduleKeys) {
+  for (const moduleKey of answers2.moduleKeys) {
     const moduleFile = MODULE_MAP[moduleKey];
     const src = join(ROOT, 'modules', moduleFile);
     const dest = join(outputDir, 'modules', moduleFile);
@@ -224,21 +307,53 @@ async function main() {
 `);
   }
 
-  // Copy and customize openclaw config
+  // Build openclaw config
   const config = JSON.parse(readFileSync(join(ROOT, 'config', 'openclaw.template.json'), 'utf-8'));
   config.agents.defaults.workspace = outputDir;
   const discordId = answers.discordId.trim();
   const discordToken = answers.discordToken.trim();
-  config.channels.discord.token = discordToken || '__DISCORD_BOT_TOKEN__';
+  config.channels.discord.token = discordToken || '';
   config.channels.discord.dmPolicy = 'allowlist';
   config.channels.discord.allowFrom = [discordId];
   config.commands = { ownerAllowFrom: [discordId] };
+
+  // Discord server policy
+  if (discordPolicy === 'mention') {
+    config.channels.discord.groupPolicy = 'mention';
+  } else if (discordPolicy === 'all') {
+    config.channels.discord.groupPolicy = 'all';
+  } else {
+    // allowlist with specific servers/channels
+    config.channels.discord.groupPolicy = 'allowlist';
+    const guilds = {};
+    for (const server of serverConfigs) {
+      const guild = {
+        requireMention: server.requireMention,
+        channels: {},
+      };
+      if (server.channels.length > 0) {
+        for (const chId of server.channels) {
+          guild.channels[chId] = {
+            allow: true,
+            requireMention: server.requireMention,
+            enabled: true,
+          };
+        }
+      } else {
+        // No specific channels = server-wide (empty channels object means all channels)
+        guild.channels = {};
+      }
+      guilds[server.guildId] = guild;
+    }
+    config.channels.discord.guilds = guilds;
+  }
+
   writeOutput(outputDir, 'openclaw.json', JSON.stringify(config, null, 2) + '\n');
 
   // Create empty .gitkeep in memory folder
   writeFileSync(join(outputDir, 'memory', '.gitkeep'), '', 'utf-8');
 
-  console.log(`\n✅ ${vars.name} 생성 완료! openclaw start로 시작하세요.`);
+  console.log(`\n✅ ${vars.name} 생성 완료!`);
   console.log(`📁 위치: ${outputDir}`);
   console.log('\n생성된 파일:');
   console.log('  - SOUL.md (캐릭터 영혼)');
@@ -248,14 +363,26 @@ async function main() {
   console.log('  - MEMORY.md (장기 기억)');
   console.log('  - openclaw.json (설정)');
   console.log('  - memory/ (일별 기억 폴더)');
-  if (answers.moduleKeys.length > 0) {
+  if (answers2.moduleKeys.length > 0) {
     console.log('  - modules/ (선택한 시스템 모듈)');
   }
-  console.log('\n다음 단계:');
+
+  console.log('\n🚀 구동 방법:');
+  if (discordPolicy === 'mention') {
+    console.log('  서버 정책: 멘션(@봇) 시에만 반응');
+  } else if (discordPolicy === 'all') {
+    console.log('  서버 정책: 모든 서버에서 항상 반응');
+  } else {
+    console.log(`  서버 정책: ${serverConfigs.length}개 서버 허용목록`);
+  }
+  console.log('');
   console.log('  1. openclaw.json에서 API 키와 Discord 토큰을 설정하세요');
   console.log('  2. USER.md에 주인 정보를 추가하세요');
   console.log('  3. SOUL.md를 원하는 대로 커스텀하세요');
-  console.log('  4. openclaw start로 시작!\n');
+  console.log('  4. 구동:');
+  console.log(`     $env:OPENCLAW_HOME = "${outputDir}"`);
+  console.log('     openclaw gateway run');
+  console.log('');
 }
 
 main().catch((err) => {

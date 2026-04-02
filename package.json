@@ -1,10 +1,11 @@
 {
-  "name": "openclaw-persona",
+  "name": "@aptol/openclaw-persona",
   "version": "1.0.0",
   "description": "Create your own AI persona for OpenClaw — interactive CLI character creator with presets, modules, and full customization",
   "type": "module",
   "bin": {
-    "openclaw-persona": "./bin/create.mjs"
+    "openclaw-persona": "./bin/create.mjs",
+    "oc-persona": "./bin/create.mjs"
   },
   "scripts": {
     "create": "node bin/create.mjs"
@@ -29,5 +30,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/APTOL-7177/openclaw-persona"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
