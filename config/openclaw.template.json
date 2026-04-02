@@ -1,0 +1,43 @@
+{
+  "auth": {
+    "profiles": {
+      "anthropic:default": {
+        "provider": "anthropic",
+        "mode": "token"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-20250514"
+      },
+      "workspace": "__WORKSPACE_PATH__",
+      "contextTokens": 200000,
+      "memorySearch": {
+        "enabled": true,
+        "sources": ["memory"],
+        "provider": "openai"
+      },
+      "thinkingDefault": "low"
+    }
+  },
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "token": "__DISCORD_BOT_TOKEN__",
+      "groupPolicy": "allowlist",
+      "dmPolicy": "allowlist",
+      "allowFrom": ["__OWNER_DISCORD_ID__"],
+      "historyLimit": 16,
+      "streaming": "partial"
+    }
+  },
+  "commands": {
+    "ownerAllowFrom": ["__OWNER_DISCORD_ID__"]
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local"
+  }
+}

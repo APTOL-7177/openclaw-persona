@@ -1,0 +1,33 @@
+{
+  "name": "openclaw-persona",
+  "version": "1.0.0",
+  "description": "Create your own AI persona for OpenClaw — interactive CLI character creator with presets, modules, and full customization",
+  "type": "module",
+  "bin": {
+    "openclaw-persona": "./bin/create.mjs"
+  },
+  "scripts": {
+    "create": "node bin/create.mjs"
+  },
+  "keywords": [
+    "openclaw",
+    "ai",
+    "persona",
+    "character",
+    "chatbot",
+    "discord",
+    "claude"
+  ],
+  "author": "APTOL",
+  "license": "MIT",
+  "dependencies": {
+    "inquirer": "^9.2.12"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/APTOL-7177/openclaw-persona"
+  }
+}
