@@ -168,24 +168,24 @@ async function main() {
   const authModeAnswers = await inquirer.prompt([{
     type: 'list', name: 'anthropicAuth', message: 'Anthropic 인증 방식:',
     choices: [
-      { name: 'API 키 직접 입력 (sk-ant-...)', value: 'token' },
-      { name: 'Claude Max/Pro 구독 연결 (OAuth)', value: 'oauth' },
+      { name: 'API 키 직접 입력 (sk-ant-...) — 추천', value: 'token' },
+      { name: 'Claude Max/Pro 구독 (API 키 필요, console.anthropic.com에서 발급)', value: 'subscription' },
       { name: '나중에 설정', value: 'skip' },
     ],
   }]);
 
   let anthropicKey = '';
   let anthropicOAuth = false;
-  if (authModeAnswers.anthropicAuth === 'token') {
+  if (authModeAnswers.anthropicAuth === 'token' || authModeAnswers.anthropicAuth === 'subscription') {
+    if (authModeAnswers.anthropicAuth === 'subscription') {
+      console.log('\n💡 Claude Max/Pro 구독자도 API 키가 필요합니다.');
+      console.log('   https://console.anthropic.com/settings/keys 에서 발급하세요.\n');
+    }
     const { key } = await inquirer.prompt([{ type: 'password', name: 'key', message: 'Anthropic API 키 (sk-ant-...):', mask: '*' }]);
     anthropicKey = key.trim();
-  } else if (authModeAnswers.anthropicAuth === 'oauth') {
-    anthropicOAuth = true;
-    console.log('\n📌 구독 연결은 생성 후 아래 명령어로 완료하세요:');
-    if (IS_WINDOWS) console.log('   $env:OPENCLAW_HOME = "<출력 디렉토리>"');
-    else console.log('   export OPENCLAW_HOME="<출력 디렉토리>"');
-    console.log('   openclaw setup');
-    console.log('   (Anthropic 인증 단계에서 OAuth 로그인 선택)\n');
+    if (!anthropicKey) {
+      console.log('\n⚠️  API 키가 비어있습니다. 나중에 auth-profiles.json에서 수동 설정하세요.\n');
+    }
   }
 
   console.log('💡 빈칸으로 넘기면 나중에 openclaw.json에서 수동 설정 가능\n');
@@ -319,10 +319,8 @@ async function main() {
   // Model
   config.agents.defaults.model.primary = AI_MODELS[modelAnswers.modelKey];
 
-  // FIX #4: Auth profile — use consistent name "anthropic:default"
-  if (anthropicOAuth) {
-    config.auth.profiles['anthropic:default'] = { provider: 'anthropic', mode: 'oauth' };
-  } else if (anthropicKey) {
+  // Auth profile — always token mode
+  if (anthropicKey) {
     config.auth.profiles['anthropic:default'] = { provider: 'anthropic', mode: 'token' };
   }
 
@@ -426,9 +424,8 @@ async function main() {
   const configured = [];
   const notConfigured = [];
 
-  if (anthropicKey) configured.push('Anthropic (API 키)');
-  else if (anthropicOAuth) configured.push('Anthropic (OAuth — 브라우저 인증 필요)');
-  else notConfigured.push('Anthropic 인증');
+  if (anthropicKey) configured.push('Anthropic (API 키 ✅ auth-profiles.json 자동 생성됨)');
+  else notConfigured.push('Anthropic API 키 (auth-profiles.json에서 수동 설정)');
 
   if (apiAnswers.openaiKey.trim()) configured.push('OpenAI (메모리 검색)');
   else notConfigured.push('OpenAI API 키 (메모리 검색)');
@@ -484,12 +481,11 @@ async function main() {
     console.log('');
   }
 
-  if (anthropicOAuth) {
-    console.log('🔐 Anthropic OAuth 연결:');
-    if (IS_WINDOWS) console.log(`  $env:OPENCLAW_HOME = "${outputDir}"`);
-    else console.log(`  export OPENCLAW_HOME="${outputDir}"`);
-    console.log('  openclaw setup');
-    console.log('  (Anthropic 인증 단계에서 OAuth 로그인 선택)\n');
+  if (!anthropicKey) {
+    console.log('🔐 Anthropic API 키 수동 설정:');
+    console.log(`  파일: ${join(agentDir, 'auth-profiles.json')}`);
+    console.log('  내용: {"version":1,"profiles":{"anthropic:default":{"type":"token","provider":"anthropic","token":"sk-ant-..."}}}');
+    console.log('');
   }
 }
 
