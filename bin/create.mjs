@@ -58,9 +58,9 @@ const MODULE_MAP = {
 };
 
 const DISCORD_POLICIES = {
-  '모든 서버에서 멘션(@봇) 시 반응 (추천, 설정 불필요)': 'mention',
-  '모든 서버에서 항상 반응': 'all',
-  '특정 서버/채널만 허용 (ID 직접 입력)': 'allowlist',
+  '모든 서버에서 반응 (설정 불필요)': 'open',
+  '특정 서버/채널만 허용 (ID 직접 입력, 추천)': 'allowlist',
+  '디스코드 비활성화': 'disabled',
 };
 
 const AI_MODELS = {
@@ -368,10 +368,10 @@ async function main() {
   config.commands = { native: 'auto', nativeSkills: 'auto', debug: true, restart: true, ownerAllowFrom: [discordId], ownerDisplay: 'raw' };
 
   // Server policy
-  if (discordPolicy === 'mention') {
-    config.channels.discord.groupPolicy = 'mention';
-  } else if (discordPolicy === 'all') {
-    config.channels.discord.groupPolicy = 'all';
+  if (discordPolicy === 'open') {
+    config.channels.discord.groupPolicy = 'open';
+  } else if (discordPolicy === 'disabled') {
+    config.channels.discord.groupPolicy = 'disabled';
   } else {
     config.channels.discord.groupPolicy = 'allowlist';
     const guilds = {};
@@ -456,8 +456,8 @@ async function main() {
   if (notConfigured.length > 0) console.log('  ❌ ' + notConfigured.join('\n  ❌ '));
 
   console.log(`\n🤖 모델: ${AI_MODELS[modelAnswers.modelKey]}`);
-  if (discordPolicy === 'mention') console.log('🏠 서버 정책: 멘션(@봇) 시에만 반응');
-  else if (discordPolicy === 'all') console.log('🏠 서버 정책: 모든 서버에서 항상 반응');
+  if (discordPolicy === 'open') console.log('🏠 서버 정책: 모든 서버에서 반응');
+  else if (discordPolicy === 'disabled') console.log('🏠 서버 정책: 디스코드 비활성화');
   else console.log(`🏠 서버 정책: ${serverConfigs.length}개 서버 허용목록`);
   console.log(`🌐 게이트웨이 포트: ${port}`);
 
