@@ -184,7 +184,8 @@ async function main() {
     console.log('\n📌 구독 연결은 생성 후 아래 명령어로 완료하세요:');
     if (IS_WINDOWS) console.log('   $env:OPENCLAW_HOME = "<출력 디렉토리>"');
     else console.log('   export OPENCLAW_HOME="<출력 디렉토리>"');
-    console.log('   openclaw channels login\n');
+    console.log('   openclaw setup');
+    console.log('   (Anthropic 인증 단계에서 OAuth 로그인 선택)\n');
   }
 
   console.log('💡 빈칸으로 넘기면 나중에 openclaw.json에서 수동 설정 가능\n');
@@ -487,7 +488,8 @@ async function main() {
     console.log('🔐 Anthropic OAuth 연결:');
     if (IS_WINDOWS) console.log(`  $env:OPENCLAW_HOME = "${outputDir}"`);
     else console.log(`  export OPENCLAW_HOME="${outputDir}"`);
-    console.log('  openclaw channels login\n');
+    console.log('  openclaw setup');
+    console.log('  (Anthropic 인증 단계에서 OAuth 로그인 선택)\n');
   }
 }
 
