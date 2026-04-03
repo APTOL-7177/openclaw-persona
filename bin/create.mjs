@@ -168,24 +168,35 @@ async function main() {
   const authModeAnswers = await inquirer.prompt([{
     type: 'list', name: 'anthropicAuth', message: 'Anthropic 인증 방식:',
     choices: [
-      { name: 'API 키 직접 입력 (sk-ant-...) — 추천', value: 'token' },
-      { name: 'Claude Max/Pro 구독 (API 키 필요, console.anthropic.com에서 발급)', value: 'subscription' },
+      { name: 'API 키 직접 입력 (sk-ant-...) — 종량제 사용자', value: 'token' },
+      { name: 'Claude Max/Pro 구독 연결 — 생성 후 openclaw onboard로 인증', value: 'subscription' },
       { name: '나중에 설정', value: 'skip' },
     ],
   }]);
 
   let anthropicKey = '';
-  let anthropicOAuth = false;
-  if (authModeAnswers.anthropicAuth === 'token' || authModeAnswers.anthropicAuth === 'subscription') {
-    if (authModeAnswers.anthropicAuth === 'subscription') {
-      console.log('\n💡 Claude Max/Pro 구독자도 API 키가 필요합니다.');
-      console.log('   https://console.anthropic.com/settings/keys 에서 발급하세요.\n');
-    }
+  let anthropicSubscription = false;
+  if (authModeAnswers.anthropicAuth === 'token') {
     const { key } = await inquirer.prompt([{ type: 'password', name: 'key', message: 'Anthropic API 키 (sk-ant-...):', mask: '*' }]);
     anthropicKey = key.trim();
     if (!anthropicKey) {
       console.log('\n⚠️  API 키가 비어있습니다. 나중에 auth-profiles.json에서 수동 설정하세요.\n');
     }
+  } else if (authModeAnswers.anthropicAuth === 'subscription') {
+    anthropicSubscription = true;
+    console.log('\n📌 Claude Max/Pro 구독 연결 방법 (캐릭터 생성 후 실행):');
+    console.log('');
+    console.log('   방법 1: OpenClaw 온보딩 (추천)');
+    if (IS_WINDOWS) console.log('     $env:OPENCLAW_HOME = "<출력 디렉토리>"');
+    else console.log('     export OPENCLAW_HOME="<출력 디렉토리>"');
+    console.log('     openclaw onboard');
+    console.log('     → Anthropic 선택 → setup-token 붙여넣기');
+    console.log('');
+    console.log('   방법 2: Claude CLI 경유 (Claude CLI 설치 필요)');
+    if (IS_WINDOWS) console.log('     $env:OPENCLAW_HOME = "<출력 디렉토리>"');
+    else console.log('     export OPENCLAW_HOME="<출력 디렉토리>"');
+    console.log('     openclaw models auth login --provider anthropic --method cli');
+    console.log('');
   }
 
   console.log('💡 빈칸으로 넘기면 나중에 openclaw.json에서 수동 설정 가능\n');
@@ -425,6 +436,7 @@ async function main() {
   const notConfigured = [];
 
   if (anthropicKey) configured.push('Anthropic (API 키 ✅ auth-profiles.json 자동 생성됨)');
+  else if (anthropicSubscription) notConfigured.push('Anthropic 구독 (openclaw onboard 실행 필요)');
   else notConfigured.push('Anthropic API 키 (auth-profiles.json에서 수동 설정)');
 
   if (apiAnswers.openaiKey.trim()) configured.push('OpenAI (메모리 검색)');
@@ -481,7 +493,13 @@ async function main() {
     console.log('');
   }
 
-  if (!anthropicKey) {
+  if (!anthropicKey && anthropicSubscription) {
+    console.log('🔐 Claude Max/Pro 구독 연결:');
+    if (IS_WINDOWS) console.log(`  $env:OPENCLAW_HOME = "${outputDir}"`);
+    else console.log(`  export OPENCLAW_HOME="${outputDir}"`);
+    console.log('  openclaw onboard');
+    console.log('  → Anthropic 선택 → setup-token 붙여넣기\n');
+  } else if (!anthropicKey) {
     console.log('🔐 Anthropic API 키 수동 설정:');
     console.log(`  파일: ${join(agentDir, 'auth-profiles.json')}`);
     console.log('  내용: {"version":1,"profiles":{"anthropic:default":{"type":"token","provider":"anthropic","token":"sk-ant-..."}}}');
